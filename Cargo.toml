@@ -1,0 +1,20 @@
+[package]
+name = "cp_sat"
+version = "0.1.0"
+edition = "2018"
+description = "Rust bindings to the Google CP-SAT constraint programming solver."
+documentation = "https://docs.rs/cp_sat"
+repository = "https://github.com/KardinalAI/cp_sat"
+license = "Apache-2.0"
+keywords = ["constraint", "programming", "CP"]
+categories = ["api-bindings", "mathematics", "science"]
+readme = "README.md"
+
+[dependencies]
+prost = "0.8"
+bytes = "1.1.0"
+libc = "0.2.101"
+
+[build-dependencies]
+prost-build = { version = "0.8" }
+cc = "1.0"
