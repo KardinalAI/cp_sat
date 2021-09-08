@@ -5,6 +5,7 @@ use std::ffi::CStr;
 pub mod proto {
     include!(concat!(env!("OUT_DIR"), "/operations_research.sat.rs"));
 }
+pub mod builder;
 
 extern "C" {
     fn cp_sat_wrapper_solve(
