@@ -1,4 +1,5 @@
 use crate::proto;
+use proto::constraint_proto::Constraint as CstEnum;
 
 #[derive(Default, Debug)]
 pub struct CpModelBuilder {
@@ -43,76 +44,149 @@ impl CpModelBuilder {
     }
 
     pub fn add_or(&mut self, vars: impl IntoIterator<Item = BoolVar>) -> Constraint {
-        let index = self.proto.constraints.len();
-        self.proto.constraints.push(proto::ConstraintProto {
-            constraint: Some(proto::constraint_proto::Constraint::BoolOr(
-                proto::BoolArgumentProto {
-                    literals: vars.into_iter().map(|v| v.0).collect(),
-                },
-            )),
-            ..Default::default()
-        });
-        Constraint(index)
+        self.add_cst(CstEnum::BoolOr(proto::BoolArgumentProto {
+            literals: vars.into_iter().map(|v| v.0).collect(),
+        }))
     }
     pub fn add_and(&mut self, vars: impl IntoIterator<Item = BoolVar>) -> Constraint {
-        let index = self.proto.constraints.len();
-        self.proto.constraints.push(proto::ConstraintProto {
-            constraint: Some(proto::constraint_proto::Constraint::BoolAnd(
-                proto::BoolArgumentProto {
-                    literals: vars.into_iter().map(|v| v.0).collect(),
-                },
-            )),
-            ..Default::default()
-        });
-        Constraint(index)
+        self.add_cst(CstEnum::BoolAnd(proto::BoolArgumentProto {
+            literals: vars.into_iter().map(|v| v.0).collect(),
+        }))
     }
     pub fn add_at_most_one(&mut self, vars: impl IntoIterator<Item = BoolVar>) -> Constraint {
-        let index = self.proto.constraints.len();
-        self.proto.constraints.push(proto::ConstraintProto {
-            constraint: Some(proto::constraint_proto::Constraint::AtMostOne(
-                proto::BoolArgumentProto {
-                    literals: vars.into_iter().map(|v| v.0).collect(),
-                },
-            )),
-            ..Default::default()
-        });
-        Constraint(index)
+        self.add_cst(CstEnum::AtMostOne(proto::BoolArgumentProto {
+            literals: vars.into_iter().map(|v| v.0).collect(),
+        }))
     }
     pub fn add_exactly_one(&mut self, vars: impl IntoIterator<Item = BoolVar>) -> Constraint {
-        let index = self.proto.constraints.len();
-        self.proto.constraints.push(proto::ConstraintProto {
-            constraint: Some(proto::constraint_proto::Constraint::ExactlyOne(
-                proto::BoolArgumentProto {
-                    literals: vars.into_iter().map(|v| v.0).collect(),
-                },
-            )),
-            ..Default::default()
-        });
-        Constraint(index)
+        self.add_cst(CstEnum::ExactlyOne(proto::BoolArgumentProto {
+            literals: vars.into_iter().map(|v| v.0).collect(),
+        }))
     }
     pub fn add_xor(&mut self, vars: impl IntoIterator<Item = BoolVar>) -> Constraint {
+        self.add_cst(CstEnum::BoolXor(proto::BoolArgumentProto {
+            literals: vars.into_iter().map(|v| v.0).collect(),
+        }))
+    }
+    pub fn add_all_different(&mut self, vars: impl IntoIterator<Item = IntVar>) -> Constraint {
+        self.add_cst(CstEnum::AllDiff(proto::AllDifferentConstraintProto {
+            vars: vars.into_iter().map(|v| v.0).collect(),
+        }))
+    }
+    pub fn add_linear_constraint(
+        &mut self,
+        expr: &LinearExpr,
+        (begin, end): (i64, i64),
+    ) -> Constraint {
+        self.add_cst(CstEnum::Linear(proto::LinearConstraintProto {
+            vars: expr.vars.clone(),
+            coeffs: expr.coeffs.clone(),
+            domain: vec![begin - expr.constant, end - expr.constant],
+        }))
+    }
+    pub fn add_eq<T: Into<LinearExpr>, U: Into<LinearExpr>>(
+        &mut self,
+        lhs: T,
+        rhs: U,
+    ) -> Constraint {
+        self.add_eq_by_ref(&lhs.into(), &rhs.into())
+    }
+    pub fn add_eq_by_ref(&mut self, lhs: &LinearExpr, rhs: &LinearExpr) -> Constraint {
+        let (mut cst, val) = create_linear_proto(lhs, rhs);
+        cst.domain.extend([val, val]);
+        self.add_cst(CstEnum::Linear(cst))
+    }
+    pub fn add_ge<T: Into<LinearExpr>, U: Into<LinearExpr>>(
+        &mut self,
+        lhs: T,
+        rhs: U,
+    ) -> Constraint {
+        self.add_ge_by_ref(&lhs.into(), &rhs.into())
+    }
+    pub fn add_ge_by_ref(&mut self, lhs: &LinearExpr, rhs: &LinearExpr) -> Constraint {
+        let (mut cst, val) = create_linear_proto(lhs, rhs);
+        cst.domain.extend([val, i64::MAX]);
+        self.add_cst(CstEnum::Linear(cst))
+    }
+    pub fn add_le<T: Into<LinearExpr>, U: Into<LinearExpr>>(
+        &mut self,
+        lhs: T,
+        rhs: U,
+    ) -> Constraint {
+        self.add_le_by_ref(&lhs.into(), &rhs.into())
+    }
+    pub fn add_le_by_ref(&mut self, lhs: &LinearExpr, rhs: &LinearExpr) -> Constraint {
+        let (mut cst, val) = create_linear_proto(lhs, rhs);
+        cst.domain.extend([i64::MIN, val]);
+        self.add_cst(CstEnum::Linear(cst))
+    }
+    pub fn add_gt<T: Into<LinearExpr>, U: Into<LinearExpr>>(
+        &mut self,
+        lhs: T,
+        rhs: U,
+    ) -> Constraint {
+        self.add_gt_by_ref(&lhs.into(), &rhs.into())
+    }
+    pub fn add_gt_by_ref(&mut self, lhs: &LinearExpr, rhs: &LinearExpr) -> Constraint {
+        let (mut cst, val) = create_linear_proto(lhs, rhs);
+        cst.domain.extend([val + 1, i64::MAX]);
+        self.add_cst(CstEnum::Linear(cst))
+    }
+    pub fn add_lt<T: Into<LinearExpr>, U: Into<LinearExpr>>(
+        &mut self,
+        lhs: T,
+        rhs: U,
+    ) -> Constraint {
+        self.add_lt_by_ref(&lhs.into(), &rhs.into())
+    }
+    pub fn add_lt_by_ref(&mut self, lhs: &LinearExpr, rhs: &LinearExpr) -> Constraint {
+        let (mut cst, val) = create_linear_proto(lhs, rhs);
+        cst.domain.extend([i64::MIN, val - 1]);
+        self.add_cst(CstEnum::Linear(cst))
+    }
+    pub fn add_ne<T: Into<LinearExpr>, U: Into<LinearExpr>>(
+        &mut self,
+        lhs: T,
+        rhs: U,
+    ) -> Constraint {
+        self.add_ne_by_ref(&lhs.into(), &rhs.into())
+    }
+    pub fn add_ne_by_ref(&mut self, lhs: &LinearExpr, rhs: &LinearExpr) -> Constraint {
+        let (mut cst, val) = create_linear_proto(lhs, rhs);
+        cst.domain.extend([i64::MIN, val - 1, val + 1, i64::MAX]);
+        self.add_cst(CstEnum::Linear(cst))
+    }
+    fn add_cst(&mut self, cst: CstEnum) -> Constraint {
         let index = self.proto.constraints.len();
         self.proto.constraints.push(proto::ConstraintProto {
-            constraint: Some(proto::constraint_proto::Constraint::BoolXor(
-                proto::BoolArgumentProto {
-                    literals: vars.into_iter().map(|v| v.0).collect(),
-                },
-            )),
+            constraint: Some(cst),
             ..Default::default()
         });
         Constraint(index)
     }
-    pub fn add_all_different(&mut self, vars: impl IntoIterator<Item = IntVar>) -> Constraint {
-        let index = self.proto.constraints.len();
-        self.proto.constraints.push(proto::ConstraintProto {
-            constraint: Some(proto::constraint_proto::Constraint::AllDiff(
-                proto::AllDifferentConstraintProto {
-                    vars: vars.into_iter().map(|v| v.0).collect(),
-                },
-            )),
-            ..Default::default()
+
+    pub fn minimize<T: Into<LinearExpr>>(&mut self, expr: T) {
+        let expr = expr.into();
+        self.proto.objective = Some(proto::CpObjectiveProto {
+            vars: expr.vars,
+            coeffs: expr.coeffs,
+            offset: expr.constant as f64,
+            scaling_factor: 1.,
+            domain: vec![],
         });
-        Constraint(index)
+    }
+    pub fn maximize<T: Into<LinearExpr>>(&mut self, expr: T) {
+        let mut expr = expr.into();
+        for coeff in &mut expr.coeffs {
+            *coeff *= -1;
+        }
+        self.proto.objective = Some(proto::CpObjectiveProto {
+            vars: expr.vars,
+            coeffs: expr.coeffs,
+            offset: -expr.constant as f64,
+            scaling_factor: -1.,
+            domain: vec![],
+        });
     }
 
     pub fn stats(&self) -> String {
@@ -161,13 +235,130 @@ impl From<BoolVar> for IntVar {
 impl IntVar {
     pub fn solution_value(self, response: &proto::CpSolverResponse) -> i64 {
         if self.0 < 0 {
-            use std::ops::Not;
-            1 - IntVar::from(BoolVar(self.0).not()).solution_value(response)
+            1 - self.not().solution_value(response)
         } else {
             response.solution[self.0 as usize]
         }
+    }
+    fn not(self) -> Self {
+        IntVar::from(!BoolVar(self.0))
     }
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct Constraint(usize);
+
+#[derive(Clone, Default, Debug)]
+pub struct LinearExpr {
+    vars: Vec<i32>,
+    coeffs: Vec<i64>,
+    constant: i64,
+}
+impl std::ops::AddAssign<i64> for LinearExpr {
+    fn add_assign(&mut self, rhs: i64) {
+        self.constant += rhs;
+    }
+}
+impl<V: Into<IntVar>> std::ops::AddAssign<(i64, V)> for LinearExpr {
+    fn add_assign(&mut self, (coeff, var): (i64, V)) {
+        let var = var.into();
+        if var.0 < 0 {
+            self.vars.push(var.not().0);
+            self.coeffs.push(-coeff);
+            self.constant += coeff;
+        } else {
+            self.vars.push(var.0);
+            self.coeffs.push(coeff);
+        }
+    }
+}
+impl<V: Into<IntVar>> std::ops::AddAssign<V> for LinearExpr {
+    fn add_assign(&mut self, var: V) {
+        *self += (1, var);
+    }
+}
+impl<V: Into<IntVar>> std::iter::Extend<(i64, V)> for LinearExpr {
+    fn extend<I: IntoIterator<Item = (i64, V)>>(&mut self, iter: I) {
+        for (coeff, var) in iter.into_iter() {
+            *self += (coeff, var.into());
+        }
+    }
+}
+impl<V: Into<IntVar>> std::iter::FromIterator<(i64, V)> for LinearExpr {
+    fn from_iter<I: IntoIterator<Item = (i64, V)>>(iter: I) -> Self {
+        let mut res = Self::default();
+        res.extend(iter);
+        res
+    }
+}
+impl<V: Into<IntVar>> std::iter::Extend<V> for LinearExpr {
+    fn extend<I: IntoIterator<Item = V>>(&mut self, iter: I) {
+        for var in iter.into_iter() {
+            *self += var.into();
+        }
+    }
+}
+impl<V: Into<IntVar>> std::iter::FromIterator<V> for LinearExpr {
+    fn from_iter<I: IntoIterator<Item = V>>(iter: I) -> Self {
+        let mut res = Self::default();
+        res.extend(iter);
+        res
+    }
+}
+impl<V: Into<IntVar>> From<V> for LinearExpr {
+    fn from(var: V) -> Self {
+        let mut res = Self::default();
+        res += var;
+        res
+    }
+}
+impl From<i64> for LinearExpr {
+    fn from(constant: i64) -> Self {
+        let mut res = Self::default();
+        res += constant;
+        res
+    }
+}
+impl<V: Into<IntVar>, const L: usize> From<[(i64, V); L]> for LinearExpr {
+    fn from(expr: [(i64, V); L]) -> Self {
+        let mut res = Self::default();
+        for term in expr {
+            res += term;
+        }
+        res
+    }
+}
+impl<T> std::ops::Add<T> for LinearExpr
+where
+    LinearExpr: std::ops::AddAssign<T>,
+{
+    type Output = LinearExpr;
+    fn add(mut self, rhs: T) -> Self::Output {
+        self += rhs;
+        self
+    }
+}
+
+fn create_linear_proto(
+    left: &LinearExpr,
+    right: &LinearExpr,
+) -> (proto::LinearConstraintProto, i64) {
+    (
+        proto::LinearConstraintProto {
+            vars: left
+                .vars
+                .iter()
+                .copied()
+                .chain(right.vars.iter().copied())
+                .collect(),
+            coeffs: left
+                .coeffs
+                .iter()
+                .copied()
+                .chain(right.coeffs.iter().map(|&c| -c))
+                .collect(),
+            domain: vec![],
+        },
+        right.constant - left.constant,
+    )
+}
