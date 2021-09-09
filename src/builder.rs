@@ -92,7 +92,7 @@ impl CpModelBuilder {
         self.add_eq_by_ref(&lhs.into(), &rhs.into())
     }
     pub fn add_eq_by_ref(&mut self, lhs: &LinearExpr, rhs: &LinearExpr) -> Constraint {
-        let (mut cst, val) = create_linear_proto(lhs, rhs);
+        let (mut cst, val) = create_linear_cst_proto(lhs, rhs);
         cst.domain.extend([val, val]);
         self.add_cst(CstEnum::Linear(cst))
     }
@@ -104,7 +104,7 @@ impl CpModelBuilder {
         self.add_ge_by_ref(&lhs.into(), &rhs.into())
     }
     pub fn add_ge_by_ref(&mut self, lhs: &LinearExpr, rhs: &LinearExpr) -> Constraint {
-        let (mut cst, val) = create_linear_proto(lhs, rhs);
+        let (mut cst, val) = create_linear_cst_proto(lhs, rhs);
         cst.domain.extend([val, i64::MAX]);
         self.add_cst(CstEnum::Linear(cst))
     }
@@ -116,7 +116,7 @@ impl CpModelBuilder {
         self.add_le_by_ref(&lhs.into(), &rhs.into())
     }
     pub fn add_le_by_ref(&mut self, lhs: &LinearExpr, rhs: &LinearExpr) -> Constraint {
-        let (mut cst, val) = create_linear_proto(lhs, rhs);
+        let (mut cst, val) = create_linear_cst_proto(lhs, rhs);
         cst.domain.extend([i64::MIN, val]);
         self.add_cst(CstEnum::Linear(cst))
     }
@@ -128,7 +128,7 @@ impl CpModelBuilder {
         self.add_gt_by_ref(&lhs.into(), &rhs.into())
     }
     pub fn add_gt_by_ref(&mut self, lhs: &LinearExpr, rhs: &LinearExpr) -> Constraint {
-        let (mut cst, val) = create_linear_proto(lhs, rhs);
+        let (mut cst, val) = create_linear_cst_proto(lhs, rhs);
         cst.domain.extend([val + 1, i64::MAX]);
         self.add_cst(CstEnum::Linear(cst))
     }
@@ -140,7 +140,7 @@ impl CpModelBuilder {
         self.add_lt_by_ref(&lhs.into(), &rhs.into())
     }
     pub fn add_lt_by_ref(&mut self, lhs: &LinearExpr, rhs: &LinearExpr) -> Constraint {
-        let (mut cst, val) = create_linear_proto(lhs, rhs);
+        let (mut cst, val) = create_linear_cst_proto(lhs, rhs);
         cst.domain.extend([i64::MIN, val - 1]);
         self.add_cst(CstEnum::Linear(cst))
     }
@@ -152,9 +152,29 @@ impl CpModelBuilder {
         self.add_ne_by_ref(&lhs.into(), &rhs.into())
     }
     pub fn add_ne_by_ref(&mut self, lhs: &LinearExpr, rhs: &LinearExpr) -> Constraint {
-        let (mut cst, val) = create_linear_proto(lhs, rhs);
+        let (mut cst, val) = create_linear_cst_proto(lhs, rhs);
         cst.domain.extend([i64::MIN, val - 1, val + 1, i64::MAX]);
         self.add_cst(CstEnum::Linear(cst))
+    }
+    pub fn add_min_eq(
+        &mut self,
+        target: impl Into<LinearExpr>,
+        exprs: impl IntoIterator<Item = impl Into<LinearExpr>>,
+    ) -> Constraint {
+        self.add_cst(CstEnum::LinMin(proto::LinearArgumentProto {
+            target: Some(target.into().into()),
+            exprs: exprs.into_iter().map(|e| e.into().into()).collect(),
+        }))
+    }
+    pub fn add_max_eq(
+        &mut self,
+        target: impl Into<LinearExpr>,
+        exprs: impl IntoIterator<Item = impl Into<LinearExpr>>,
+    ) -> Constraint {
+        self.add_cst(CstEnum::LinMax(proto::LinearArgumentProto {
+            target: Some(target.into().into()),
+            exprs: exprs.into_iter().map(|e| e.into().into()).collect(),
+        }))
     }
     fn add_cst(&mut self, cst: CstEnum) -> Constraint {
         let index = self.proto.constraints.len();
@@ -338,8 +358,17 @@ where
         self
     }
 }
+impl From<LinearExpr> for proto::LinearExpressionProto {
+    fn from(expr: LinearExpr) -> Self {
+        proto::LinearExpressionProto {
+            vars: expr.vars,
+            coeffs: expr.coeffs,
+            offset: expr.constant,
+        }
+    }
+}
 
-fn create_linear_proto(
+fn create_linear_cst_proto(
     left: &LinearExpr,
     right: &LinearExpr,
 ) -> (proto::LinearConstraintProto, i64) {
