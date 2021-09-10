@@ -10,6 +10,10 @@ keywords = ["constraint", "programming", "CP"]
 categories = ["api-bindings", "mathematics", "science"]
 readme = "README.md"
 
+[features]
+# the doc feature will not build C++ wrappers (not needed by the doc)
+doc = []
+
 [dependencies]
 prost = "0.8"
 bytes = "1.1.0"
@@ -18,3 +22,7 @@ libc = "0.2.101"
 [build-dependencies]
 prost-build = { version = "0.8" }
 cc = "1.0"
+
+[package.metadata.docs.rs]
+targets = ["x86_64-unknown-linux-gnu"]
+features = ["doc"]
