@@ -7,7 +7,7 @@ fn main() {
     )
     .unwrap();
 
-    if !std::env::var("CARGO_FEATURE_DOC").is_ok() {
+    if !std::env::var("DOCS_RS").is_ok() {
         let ortools_prefix = std::env::var("ORTOOLS_PREFIX")
             .ok()
             .unwrap_or("/opt/ortools".into());
