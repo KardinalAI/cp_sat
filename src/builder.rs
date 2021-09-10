@@ -185,6 +185,40 @@ impl CpModelBuilder {
         Constraint(index)
     }
 
+    /// Add a solution hint.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// # use cp_sat::builder::CpModelBuilder;
+    /// # use cp_sat::proto::{CpSolverStatus, SatParameters};
+    /// # use cp_sat::proto::sat_parameters::SearchBranching;
+    /// let mut model = CpModelBuilder::default();
+    /// let x = model.new_int_var([(0, 100)]);
+    /// let y = model.new_bool_var();
+    /// model.add_hint(x, 42);
+    /// model.add_hint(y, 1);
+    /// model.add_ge([(1, x), (3, y.into())], 3);
+    /// model.maximize(y);
+    /// let response = model.solve();
+    /// println!("{:#?}", response);
+    /// assert_eq!(response.status(), CpSolverStatus::Optimal);
+    /// ```
+    pub fn add_hint(&mut self, var: impl Into<IntVar>, value: i64) {
+        let var = var.into();
+        let hints = self
+            .proto
+            .solution_hint
+            .get_or_insert_with(Default::default);
+        if var.0 < 0 {
+            hints.vars.push(var.not().0);
+            hints.values.push(1 - value);
+        } else {
+            hints.vars.push(var.0);
+            hints.values.push(value);
+        }
+    }
+
     pub fn minimize<T: Into<LinearExpr>>(&mut self, expr: T) {
         let expr = expr.into();
         self.proto.objective = Some(proto::CpObjectiveProto {
@@ -214,6 +248,9 @@ impl CpModelBuilder {
     }
     pub fn solve(&self) -> proto::CpSolverResponse {
         crate::solve(self.proto())
+    }
+    pub fn solve_with_parameters(&self, params: &proto::SatParameters) -> proto::CpSolverResponse {
+        crate::solve_with_parameters(self.proto(), params)
     }
 }
 
