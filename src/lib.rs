@@ -1,95 +1,58 @@
-use libc::c_char;
-use prost::Message;
-use std::ffi::CStr;
+//! The `cp_sat` crate provides an interface to [Google CP
+//! SAT](https://developers.google.com/optimization/cp/cp_solver).
+//!
+//! # OR-Tools installation
+//!
+//! For `cp_sat` to work, you need to have a working OR-Tools
+//! installation. By default, this crate will use the default C++
+//! compiler, and add `/opt/ortools` in the search path. If you want
+//! to provide your OR-Tools installation directory, you can define
+//! the `ORTOOL_PREFIX` environment variable.
+//!
+//! # Brief overview
+//!
+//! The [builder::CpModelBuilder] provides an easy interface to
+//! construct your problem. You can then solve and access to the
+//! solver response easily. Here you can find the translation of the
+//! first tutorial in the official documentation of CP SAT:
+//!
+//! ```
+//! use cp_sat::builder::CpModelBuilder;
+//! use cp_sat::proto::CpSolverStatus;
+//!
+//! fn main() {
+//!     let mut model = CpModelBuilder::default();
+//!
+//!     let x = model.new_int_var_with_name([(0, 2)], "x");
+//!     let y = model.new_int_var_with_name([(0, 2)], "y");
+//!     let z = model.new_int_var_with_name([(0, 2)], "z");
+//!
+//!     model.add_ne(x, y);
+//!
+//!     let response = model.solve();
+//!     println!(
+//!         "{}",
+//!         cp_sat::ffi::cp_solver_response_stats(&response, false)
+//!     );
+//!
+//!     if response.status() == CpSolverStatus::Optimal {
+//!         println!("x = {}", x.solution_value(&response));
+//!         println!("y = {}", y.solution_value(&response));
+//!         println!("z = {}", z.solution_value(&response));
+//!     }
+//! }
+//! ```
 
+#![deny(missing_docs)]
+
+/// Model builder for ergonomic and efficient model creation.
+pub mod builder;
+
+/// Export of the CP SAT protobufs
+#[allow(missing_docs, rustdoc::broken_intra_doc_links, rustdoc::bare_urls)]
 pub mod proto {
     include!(concat!(env!("OUT_DIR"), "/operations_research.sat.rs"));
 }
-pub mod builder;
 
-extern "C" {
-    fn cp_sat_wrapper_solve(
-        model_buf: *const u8,
-        model_size: usize,
-        out_size: &mut usize,
-    ) -> *mut u8;
-    fn cp_sat_wrapper_solve_with_parameters(
-        model_buf: *const u8,
-        model_size: usize,
-        params_buf: *const u8,
-        params_size: usize,
-        out_size: &mut usize,
-    ) -> *mut u8;
-    fn cp_sat_wrapper_cp_model_stats(model_buf: *const u8, model_size: usize) -> *mut c_char;
-    fn cp_sat_wrapper_cp_solver_response_stats(
-        response_buf: *const u8,
-        response_size: usize,
-        has_objective: bool,
-    ) -> *mut c_char;
-}
-
-pub fn solve(model: &proto::CpModelProto) -> proto::CpSolverResponse {
-    let mut buf = Vec::default();
-    model.encode(&mut buf).unwrap();
-    let mut out_size = 0;
-    let res = unsafe { cp_sat_wrapper_solve(buf.as_ptr(), buf.len(), &mut out_size) };
-    let out_slice = unsafe { std::slice::from_raw_parts(res, out_size) };
-    let response = proto::CpSolverResponse::decode(out_slice).unwrap();
-    unsafe { libc::free(res as _) };
-    response
-}
-
-pub fn solve_with_parameters(
-    model: &proto::CpModelProto,
-    params: &proto::SatParameters,
-) -> proto::CpSolverResponse {
-    let mut model_buf = Vec::default();
-    model.encode(&mut model_buf).unwrap();
-    let mut params_buf = Vec::default();
-    params.encode(&mut params_buf).unwrap();
-
-    let mut out_size = 0;
-    let res = unsafe {
-        cp_sat_wrapper_solve_with_parameters(
-            model_buf.as_ptr(),
-            model_buf.len(),
-            params_buf.as_ptr(),
-            params_buf.len(),
-            &mut out_size,
-        )
-    };
-    let out_slice = unsafe { std::slice::from_raw_parts(res, out_size) };
-    let response = proto::CpSolverResponse::decode(out_slice).unwrap();
-    unsafe { libc::free(res as _) };
-    response
-}
-
-pub fn cp_model_stats(model: &proto::CpModelProto) -> String {
-    let mut model_buf = Vec::default();
-    model.encode(&mut model_buf).unwrap();
-    let char_ptr = unsafe { cp_sat_wrapper_cp_model_stats(model_buf.as_ptr(), model_buf.len()) };
-    let res = unsafe { CStr::from_ptr(char_ptr) }
-        .to_str()
-        .unwrap()
-        .to_owned();
-    unsafe { libc::free(char_ptr as _) };
-    res
-}
-
-pub fn cp_solver_response_stats(response: &proto::CpSolverResponse, has_objective: bool) -> String {
-    let mut response_buf = Vec::default();
-    response.encode(&mut response_buf).unwrap();
-    let char_ptr = unsafe {
-        cp_sat_wrapper_cp_solver_response_stats(
-            response_buf.as_ptr(),
-            response_buf.len(),
-            has_objective,
-        )
-    };
-    let res = unsafe { CStr::from_ptr(char_ptr) }
-        .to_str()
-        .unwrap()
-        .to_owned();
-    unsafe { libc::free(char_ptr as _) };
-    res
-}
+/// Interface with the CP SAT functions.
+pub mod ffi;
