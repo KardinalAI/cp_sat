@@ -594,6 +594,11 @@ impl CpModelBuilder {
         Constraint(index)
     }
 
+    /// Delete all constraints.
+    pub fn del_all_cst(&mut self) {
+        self.proto.constraints = Vec::default();
+    }
+
     /// Add a solution hint.
     ///
     /// # Example
@@ -622,6 +627,48 @@ impl CpModelBuilder {
             hints.vars.push(var.0);
             hints.values.push(value);
         }
+    }
+
+    /// Add all solution hints from a solution.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// # use cp_sat::builder::{CpModelBuilder, LinearExpr};
+    /// # use cp_sat::proto::CpSolverStatus;
+    /// let mut model = CpModelBuilder::default();
+    /// let x = model.new_int_var([(50, 100)]);
+    /// let y = model.new_int_var([(0, 51)]);
+    /// model.add_hint(x, 75);
+    /// model.add_hint(y, 42);
+    /// model.add_lt(x, y);
+    /// let response = model.solve();
+    /// assert_eq!(response.status(), CpSolverStatus::Optimal);
+    /// assert!(x.solution_value(&response) < y.solution_value(&response));
+    /// assert_eq!(50, x.solution_value(&response));
+    /// assert_eq!(51, y.solution_value(&response));
+    /// model.del_hints();
+    /// model.add_hints(response.solution);
+    /// model.del_all_cst();
+    /// let response = model.solve();
+    /// assert_eq!(response.status(), CpSolverStatus::Optimal);
+    ///  
+    /// ```
+    pub fn add_hints(&mut self, solution: Vec<i64>) {
+        let hints = self
+            .proto
+            .solution_hint
+            .get_or_insert_with(Default::default);
+
+        for (i, _) in solution.iter().enumerate().take(self.proto.variables.len()) {
+            hints.vars.push(i as i32);
+            hints.values.push(solution[i]);
+        }
+    }
+
+    /// Delete all solution hints.
+    pub fn del_hints(&mut self) {
+        self.proto.solution_hint = None;
     }
 
     /// Sets the minimization objective.
@@ -917,7 +964,7 @@ impl<V: Into<IntVar>> From<(i64, V)> for LinearExpr {
             res.vars.push(var.0);
             res.coeffs.push(coeff);
         }
-        return res;
+        res
     }
 }
 impl<V: Into<IntVar>, const L: usize> From<[(i64, V); L]> for LinearExpr {
