@@ -303,14 +303,12 @@ impl CpModelBuilder {
     ///
     /// ```
     /// # use cp_sat::builder::CpModelBuilder;
-    /// # use cp_sat::proto::{CpSolverStatus, SatParameters};
+    /// # use cp_sat::proto::CpSolverStatus;
     /// let mut model = CpModelBuilder::default();
     /// let x = model.new_int_var([(0, 100)]);
     /// let y = model.new_bool_var();
     /// model.add_hint(x, 42);
     /// model.add_hint(y, 1);
-    /// model.add_ge([(1, x), (3, y.into())], 3);
-    /// model.maximize(y);
     /// let response = model.solve();
     /// assert_eq!(response.status(), CpSolverStatus::Optimal);
     /// ```
