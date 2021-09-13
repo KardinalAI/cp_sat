@@ -153,6 +153,39 @@ impl CpModelBuilder {
         self.proto.variables[var.into().0 as usize].name = name.into();
     }
 
+    /// Returns the name of a constraint, empty string if not setted.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// # use cp_sat::builder::CpModelBuilder;
+    /// let mut model = CpModelBuilder::default();
+    /// let x = model.new_bool_var();
+    /// let constraint = model.add_or([x]);
+    /// assert_eq!("", model.constraint_name(constraint));
+    /// model.set_constraint_name(constraint, "or");
+    /// assert_eq!("or", model.constraint_name(constraint));
+    /// ```
+    pub fn constraint_name(&self, constraint: Constraint) -> &str {
+        &self.proto.constraints[constraint.0].name
+    }
+
+    /// Sets the name of a constraint.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// # use cp_sat::builder::CpModelBuilder;
+    /// let mut model = CpModelBuilder::default();
+    /// let x = model.new_bool_var();
+    /// let constraint = model.add_or([x]);
+    /// model.set_constraint_name(constraint, "or");
+    /// assert_eq!("or", model.constraint_name(constraint));
+    /// ```
+    pub fn set_constraint_name(&mut self, constraint: Constraint, name: &str) {
+        self.proto.constraints[constraint.0].name = name.into();
+    }
+
     /// Adds a boolean OR constraint on a list of [BoolVar].
     ///
     /// # Example
