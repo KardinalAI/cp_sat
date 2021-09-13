@@ -14,6 +14,7 @@ readme = "README.md"
 prost = "0.8"
 bytes = "1.1.0"
 libc = "0.2.101"
+smallvec = { version = "1.6.1", default-features = false, features = ["union"]}
 
 [build-dependencies]
 prost-build = { version = "0.8" }
