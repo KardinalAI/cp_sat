@@ -816,10 +816,52 @@ impl IntVar {
 #[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct Constraint(usize);
 
+/// A linear expression, used in several places in the
+/// [builder][CpModelBuilder].
+///
+/// It describes an expression in the form `ax+by+c`. Several [From]
+/// and [std::ops] traits are implemented for easy modeling.
+///
+/// # Exemple
+///
+/// Most of the builder methods that takes something linear take in
+/// practice a `impl Into<LinearExpr>`.  In the example, we will use
+/// [CpModelBuilder::maximize].
+///
+/// ```
+/// # use cp_sat::builder::{CpModelBuilder, LinearExpr};
+/// let mut model = CpModelBuilder::default();
+/// let x1 = model.new_int_var([(0, 100)]);
+/// let x2 = model.new_int_var([(0, 100)]);
+/// let y1 = model.new_bool_var();
+/// let y2 = model.new_bool_var();
+/// model.maximize(x1); // IntVar can be converted in LinearExpr
+/// model.maximize(y1); // as BoolVar
+/// model.maximize(42); // as i64
+/// model.maximize((42, x1)); // this means maximize 42 * x1
+/// model.maximize((42, y1)); // works also with BoolVar
+/// model.maximize([(42, x1), (1337, x2)]); // with array: 42*x1 + 1337*x2
+/// model.maximize([(42, y1), (1337, y2)]); // with array: also with bool
+/// model.maximize([(42, x1), (1337, y2.into())]); // BoolVar conversion
+///
+/// // for easy looping, we can also modify a LinearExpr
+/// let vars: Vec<_> = (0..10).map(|_| model.new_bool_var()).collect();
+/// let mut expr = LinearExpr::default(); // means 0, can also be LinearExpr::from(0)
+/// for (i, v) in vars.iter().copied().enumerate() {
+///     if i < 2 {
+///         expr += (i as i64, v);
+///     } else if i < 4 {
+///         expr -= (42, v);
+///     } else if i < 6 {
+///         expr += v;
+///     } else {
+///         expr -= LinearExpr::from([(42, v), (1337, vars[0])]) + 5;
+///     }
+/// }
+/// ```
 #[derive(Clone, Default, Debug)]
-#[allow(missing_docs)]
 pub struct LinearExpr {
-    vars: SmallVec<[i32; 2]>,
+    vars: SmallVec<[i32; 4]>,
     coeffs: SmallVec<[i64; 2]>,
     constant: i64,
 }
