@@ -1,5 +1,6 @@
 use crate::{ffi, proto};
 use proto::constraint_proto::Constraint as CstEnum;
+use smallvec::SmallVec;
 
 /// A builder for CP SAT.
 ///
@@ -355,8 +356,8 @@ impl CpModelBuilder {
         let expr = expr.into();
         let constant = expr.constant;
         self.add_cst(CstEnum::Linear(proto::LinearConstraintProto {
-            vars: expr.vars,
-            coeffs: expr.coeffs,
+            vars: expr.vars.into_vec(),
+            coeffs: expr.coeffs.into_vec(),
             domain: domain
                 .into_iter()
                 .flat_map(|(begin, end)| {
@@ -641,8 +642,8 @@ impl CpModelBuilder {
     pub fn minimize<T: Into<LinearExpr>>(&mut self, expr: T) {
         let expr = expr.into();
         self.proto.objective = Some(proto::CpObjectiveProto {
-            vars: expr.vars,
-            coeffs: expr.coeffs,
+            vars: expr.vars.into_vec(),
+            coeffs: expr.coeffs.into_vec(),
             offset: expr.constant as f64,
             scaling_factor: 1.,
             domain: vec![],
@@ -670,8 +671,8 @@ impl CpModelBuilder {
             *coeff *= -1;
         }
         self.proto.objective = Some(proto::CpObjectiveProto {
-            vars: expr.vars,
-            coeffs: expr.coeffs,
+            vars: expr.vars.into_vec(),
+            coeffs: expr.coeffs.into_vec(),
             offset: -expr.constant as f64,
             scaling_factor: -1.,
             domain: vec![],
@@ -818,12 +819,14 @@ pub struct Constraint(usize);
 #[derive(Clone, Default, Debug)]
 #[allow(missing_docs)]
 pub struct LinearExpr {
-    vars: Vec<i32>,
-    coeffs: Vec<i64>,
+    vars: SmallVec<[i32; 2]>,
+    coeffs: SmallVec<[i64; 2]>,
     constant: i64,
 }
-impl std::ops::AddAssign for LinearExpr {
-    fn add_assign(&mut self, mut rhs: Self) {
+
+impl<E: Into<LinearExpr>> std::ops::AddAssign<E> for LinearExpr {
+    fn add_assign(&mut self, rhs: E) {
+        let mut rhs = rhs.into();
         if self.vars.len() < rhs.vars.len() {
             std::mem::swap(self, &mut rhs);
         }
@@ -847,69 +850,32 @@ impl<L: Into<LinearExpr>> std::ops::SubAssign<L> for LinearExpr {
         *self += -rhs.into();
     }
 }
-impl std::ops::AddAssign<i64> for LinearExpr {
-    fn add_assign(&mut self, rhs: i64) {
-        self.constant += rhs;
-    }
-}
-impl<V: Into<IntVar>> std::ops::AddAssign<(i64, V)> for LinearExpr {
-    fn add_assign(&mut self, (coeff, var): (i64, V)) {
-        let var = var.into();
-        if var.0 < 0 {
-            self.vars.push(var.not().0);
-            self.coeffs.push(-coeff);
-            self.constant += coeff;
-        } else {
-            self.vars.push(var.0);
-            self.coeffs.push(coeff);
-        }
-    }
-}
-impl<V: Into<IntVar>> std::ops::AddAssign<V> for LinearExpr {
-    fn add_assign(&mut self, var: V) {
-        *self += (1, var);
-    }
-}
-impl<V: Into<IntVar>> std::iter::Extend<(i64, V)> for LinearExpr {
-    fn extend<I: IntoIterator<Item = (i64, V)>>(&mut self, iter: I) {
-        for (coeff, var) in iter.into_iter() {
-            *self += (coeff, var.into());
-        }
-    }
-}
-impl<V: Into<IntVar>> std::iter::FromIterator<(i64, V)> for LinearExpr {
-    fn from_iter<I: IntoIterator<Item = (i64, V)>>(iter: I) -> Self {
-        let mut res = Self::default();
-        res.extend(iter);
-        res
-    }
-}
-impl<V: Into<IntVar>> std::iter::Extend<V> for LinearExpr {
-    fn extend<I: IntoIterator<Item = V>>(&mut self, iter: I) {
-        for var in iter.into_iter() {
-            *self += var.into();
-        }
-    }
-}
-impl<V: Into<IntVar>> std::iter::FromIterator<V> for LinearExpr {
-    fn from_iter<I: IntoIterator<Item = V>>(iter: I) -> Self {
-        let mut res = Self::default();
-        res.extend(iter);
-        res
-    }
-}
+
 impl<V: Into<IntVar>> From<V> for LinearExpr {
     fn from(var: V) -> Self {
-        let mut res = Self::default();
-        res += var;
-        res
+        Self::from((1, var))
     }
 }
 impl From<i64> for LinearExpr {
     fn from(constant: i64) -> Self {
         let mut res = Self::default();
-        res += constant;
+        res.constant += constant;
         res
+    }
+}
+impl<V: Into<IntVar>> From<(i64, V)> for LinearExpr {
+    fn from((coeff, var): (i64, V)) -> Self {
+        let mut res = Self::default();
+        let var = var.into();
+        if var.0 < 0 {
+            res.vars.push(var.not().0);
+            res.coeffs.push(-coeff);
+            res.constant += coeff;
+        } else {
+            res.vars.push(var.0);
+            res.coeffs.push(coeff);
+        }
+        return res;
     }
 }
 impl<V: Into<IntVar>, const L: usize> From<[(i64, V); L]> for LinearExpr {
@@ -921,31 +887,28 @@ impl<V: Into<IntVar>, const L: usize> From<[(i64, V); L]> for LinearExpr {
         res
     }
 }
-impl<T> std::ops::Add<T> for LinearExpr
-where
-    LinearExpr: std::ops::AddAssign<T>,
-{
+
+impl<T: Into<LinearExpr>> std::ops::Add<T> for LinearExpr {
     type Output = LinearExpr;
     fn add(mut self, rhs: T) -> Self::Output {
-        self += rhs;
+        self += rhs.into();
         self
     }
 }
-impl<T> std::ops::Sub<T> for LinearExpr
-where
-    LinearExpr: std::ops::SubAssign<T>,
-{
+
+impl<T: Into<LinearExpr>> std::ops::Sub<T> for LinearExpr {
     type Output = LinearExpr;
     fn sub(mut self, rhs: T) -> Self::Output {
-        self -= rhs;
+        self -= rhs.into();
         self
     }
 }
+
 impl From<LinearExpr> for proto::LinearExpressionProto {
     fn from(expr: LinearExpr) -> Self {
         proto::LinearExpressionProto {
-            vars: expr.vars,
-            coeffs: expr.coeffs,
+            vars: expr.vars.into_vec(),
+            coeffs: expr.coeffs.into_vec(),
             offset: expr.constant,
         }
     }
