@@ -1,4 +1,4 @@
-# Google CP-SAT solver Rust bindings
+# Google CP-SAT solver Rust bindings [![](https://img.shields.io/crates/v/cp_sat.svg)](https://crates.io/crates/cp_sat) [![](https://docs.rs/cp_sat/badge.svg)](https://docs.rs/cp_sat)
 
 Rust bindings to the Google CP-SAT constraint programming solver.
 
