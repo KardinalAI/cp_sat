@@ -37,7 +37,7 @@ cp_sat_wrapper_solve(
     assert(res);
 
     sat::SatParameters params;
-    res = model.ParseFromArray(params_buf, params_size);
+    res = params.ParseFromArray(params_buf, params_size);
     assert(res);
 
     sat::CpSolverResponse response = sat::SolveWithParameters(model, params);
