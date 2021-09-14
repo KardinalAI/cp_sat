@@ -17,6 +17,7 @@
 //! first tutorial in the official documentation of CP SAT:
 //!
 //! ```
+//! # #![allow(clippy::needless_doctest_main)]
 //! use cp_sat::builder::CpModelBuilder;
 //! use cp_sat::proto::CpSolverStatus;
 //!
