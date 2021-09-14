@@ -594,11 +594,6 @@ impl CpModelBuilder {
         Constraint(index)
     }
 
-    /// Delete all constraints.
-    pub fn del_all_cst(&mut self) {
-        self.proto.constraints = Vec::default();
-    }
-
     /// Add a solution hint.
     ///
     /// # Example
@@ -629,44 +624,24 @@ impl CpModelBuilder {
         }
     }
 
-    /// Add all solution hints from a solution.
+    /// Delete all solution hints.
     ///
     /// # Example
     ///
     /// ```
-    /// # use cp_sat::builder::{CpModelBuilder, LinearExpr};
+    /// # use cp_sat::builder::CpModelBuilder;
     /// # use cp_sat::proto::CpSolverStatus;
     /// let mut model = CpModelBuilder::default();
-    /// let x = model.new_int_var([(50, 100)]);
-    /// let y = model.new_int_var([(0, 51)]);
-    /// model.add_hint(x, 75);
-    /// model.add_hint(y, 42);
-    /// model.add_lt(x, y);
-    /// let response = model.solve();
-    /// assert_eq!(response.status(), CpSolverStatus::Optimal);
-    /// assert!(x.solution_value(&response) < y.solution_value(&response));
-    /// assert_eq!(50, x.solution_value(&response));
-    /// assert_eq!(51, y.solution_value(&response));
+    /// let x = model.new_int_var([(0, 100)]);
+    /// let y = model.new_bool_var();
+    /// model.add_hint(x, 42);
+    /// model.add_hint(y, 1);
     /// model.del_hints();
-    /// model.add_hints(response.solution);
-    /// model.del_all_cst();
+    /// model.add_hint(x, 75);
+    /// model.add_hint(y, 0);
     /// let response = model.solve();
     /// assert_eq!(response.status(), CpSolverStatus::Optimal);
-    ///  
     /// ```
-    pub fn add_hints(&mut self, solution: Vec<i64>) {
-        let hints = self
-            .proto
-            .solution_hint
-            .get_or_insert_with(Default::default);
-
-        for (i, _) in solution.iter().enumerate().take(self.proto.variables.len()) {
-            hints.vars.push(i as i32);
-            hints.values.push(solution[i]);
-        }
-    }
-
-    /// Delete all solution hints.
     pub fn del_hints(&mut self) {
         self.proto.solution_hint = None;
     }
