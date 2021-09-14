@@ -1,0 +1,21 @@
+name: Rust
+
+on:
+  push:
+    branches: [ master ]
+  pull_request:
+    branches: [ master ]
+
+jobs:
+  build:
+    steps:
+    - uses: actions/checkout@v2
+    - name: Prepare dependencies
+      run: |
+        mkdir -p /opt && cd /opt
+        curl https://github.com/google/or-tools/releases/download/v9.0/or-tools_debian-10_v9.0.9048.tar.gz | tar xzf -
+        ln -s or-tools* ortools
+    - name: Build
+      run: cargo build --verbose --all
+    - name: Run tests
+      run: LD_LIBRARY_PATH=/opt/ortools/lib cargo test --verbose --all
