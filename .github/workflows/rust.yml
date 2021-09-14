@@ -1,0 +1,24 @@
+name: Rust
+
+on:
+  push:
+    branches: [ master ]
+  pull_request:
+    branches: [ master ]
+
+jobs:
+  build:
+    runs-on: ubuntu-20.04
+    steps:
+    - uses: actions/checkout@v2
+    - name: Prepare dependencies
+      run: |
+        mkdir -p /opt && cd /opt
+        curl -sL https://github.com/google/or-tools/releases/download/v9.0/or-tools_ubuntu-20.04_v9.0.9048.tar.gz | tar xzf -
+        ln -s or-tools* ortools
+    - name: Build
+      run: LD_LIBRARY_PATH=/opt/ortools/lib cargo build --workspace
+    - name: Run tests
+      run: LD_LIBRARY_PATH=/opt/ortools/lib cargo test --workspace
+    - name: clippy
+      run: LD_LIBRARY_PATH=/opt/ortools/lib cargo clippy --workspace -- -D warnings
