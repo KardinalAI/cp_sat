@@ -20,5 +20,7 @@ jobs:
       run: LD_LIBRARY_PATH=/opt/ortools/lib cargo build --workspace
     - name: Run tests
       run: LD_LIBRARY_PATH=/opt/ortools/lib cargo test --workspace
+    - name: fmt
+      run: cargo fmt --all -- --check
     - name: clippy
       run: LD_LIBRARY_PATH=/opt/ortools/lib cargo clippy --workspace -- -D warnings
