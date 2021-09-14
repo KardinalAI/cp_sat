@@ -624,6 +624,28 @@ impl CpModelBuilder {
         }
     }
 
+    /// Delete all solution hints.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// # use cp_sat::builder::CpModelBuilder;
+    /// # use cp_sat::proto::CpSolverStatus;
+    /// let mut model = CpModelBuilder::default();
+    /// let x = model.new_int_var([(0, 100)]);
+    /// let y = model.new_bool_var();
+    /// model.add_hint(x, 42);
+    /// model.add_hint(y, 1);
+    /// model.del_hints();
+    /// model.add_hint(x, 75);
+    /// model.add_hint(y, 0);
+    /// let response = model.solve();
+    /// assert_eq!(response.status(), CpSolverStatus::Optimal);
+    /// ```
+    pub fn del_hints(&mut self) {
+        self.proto.solution_hint = None;
+    }
+
     /// Sets the minimization objective.
     ///
     /// # Example
@@ -914,7 +936,7 @@ impl<V: Into<IntVar>> From<(i64, V)> for LinearExpr {
             res.vars.push(var.0);
             res.coeffs.push(coeff);
         }
-        return res;
+        res
     }
 }
 impl<V: Into<IntVar>, const L: usize> From<[(i64, V); L]> for LinearExpr {
