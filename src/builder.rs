@@ -511,14 +511,12 @@ impl CpModelBuilder {
     /// # use cp_sat::builder::{CpModelBuilder, LinearExpr};
     /// # use cp_sat::proto::CpSolverStatus;
     /// let mut model = CpModelBuilder::default();
-    /// let x = model.new_int_var([(50, 100)]);
-    /// let y = model.new_int_var([(0, 51)]);
-    /// model.add_lt(x, y);
+    /// let x = model.new_bool_var();
+    /// model.add_ne(x, 1);
     /// let response = model.solve();
     /// assert_eq!(response.status(), CpSolverStatus::Optimal);
-    /// assert!(x.solution_value(&response) < y.solution_value(&response));
-    /// assert_eq!(50, x.solution_value(&response));
-    /// assert_eq!(51, y.solution_value(&response));
+    /// assert!(x.solution_value(&response) as i64 != 1);
+    /// assert!(!x.solution_value(&response));
     /// ```
     pub fn add_ne<T: Into<LinearExpr>, U: Into<LinearExpr>>(
         &mut self,
@@ -545,6 +543,7 @@ impl CpModelBuilder {
     /// let response = model.solve();
     /// assert_eq!(response.status(), CpSolverStatus::Optimal);
     /// assert_eq!(10., response.objective_value);
+    /// assert_eq!(10, m.solution_value(&response));
     /// ```
     pub fn add_min_eq(
         &mut self,
@@ -574,6 +573,7 @@ impl CpModelBuilder {
     /// let response = model.solve();
     /// assert_eq!(response.status(), CpSolverStatus::Optimal);
     /// assert_eq!(5., response.objective_value);
+    /// assert_eq!(5, m.solution_value(&response));
     /// ```
     pub fn add_max_eq(
         &mut self,
@@ -681,7 +681,7 @@ impl CpModelBuilder {
 
     /// Returns some statistics on the model.
     ///
-    /// #Example
+    /// # Example
     ///
     /// ```
     /// # use cp_sat::builder::CpModelBuilder;
@@ -848,14 +848,11 @@ pub struct Constraint(usize);
 /// let vars: Vec<_> = (0..10).map(|_| model.new_bool_var()).collect();
 /// let mut expr = LinearExpr::default(); // means 0, can also be LinearExpr::from(0)
 /// for (i, v) in vars.iter().copied().enumerate() {
-///     if i < 2 {
-///         expr += (i as i64, v);
-///     } else if i < 4 {
-///         expr -= (42, v);
-///     } else if i < 6 {
-///         expr += v;
-///     } else {
-///         expr -= LinearExpr::from([(42, v), (1337, vars[0])]) + 5;
+///     match i {
+///         0..=1 => expr += (i as i64, v),
+///         2..=3 => expr -= (42, v),
+///         4..=5 => expr += v,
+///         _ => expr -= LinearExpr::from([(42, v), (1337, y1)]) + 5,
 ///     }
 /// }
 /// ```
