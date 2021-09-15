@@ -877,6 +877,11 @@ pub struct Constraint(usize);
 ///         _ => expr -= LinearExpr::from([(42, v), (1337, y1)]) + 5,
 ///     }
 /// }
+///
+/// // an iterator of `Into<LinearExpr>` can be collected or extended,
+/// // meaning summing the elements
+/// model.maximize(vars.iter().copied().collect::<LinearExpr>()); // means sum(vars)
+/// expr.extend(vars.iter().map(|&v| (2, v))); // means expr += sum_vars(2 * v)
 /// ```
 #[derive(Clone, Default, Debug)]
 pub struct LinearExpr {
@@ -972,5 +977,20 @@ impl From<LinearExpr> for proto::LinearExpressionProto {
             coeffs: expr.coeffs.into_vec(),
             offset: expr.constant,
         }
+    }
+}
+
+impl<T: Into<LinearExpr>> std::iter::Extend<T> for LinearExpr {
+    fn extend<I: IntoIterator<Item = T>>(&mut self, iter: I) {
+        for e in iter {
+            *self += e;
+        }
+    }
+}
+impl<T: Into<LinearExpr>> std::iter::FromIterator<T> for LinearExpr {
+    fn from_iter<I: IntoIterator<Item = T>>(iter: I) -> Self {
+        let mut res = LinearExpr::default();
+        res.extend(iter);
+        res
     }
 }
