@@ -771,6 +771,7 @@ impl BoolVar {
     /// assert_eq!(response.status(), CpSolverStatus::Optimal);
     /// assert!(x.solution_value(&response));
     /// ```
+    #[track_caller]
     pub fn solution_value(self, response: &proto::CpSolverResponse) -> bool {
         if self.0 < 0 {
             use std::ops::Not;
@@ -822,6 +823,7 @@ impl IntVar {
     /// assert_eq!(response.status(), CpSolverStatus::Optimal);
     /// assert_eq!(42, x.solution_value(&response));
     /// ```
+    #[track_caller]
     pub fn solution_value(self, response: &proto::CpSolverResponse) -> i64 {
         if self.0 < 0 {
             1 - self.not().solution_value(response)
