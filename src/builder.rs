@@ -715,6 +715,25 @@ impl CpModelBuilder {
         ffi::cp_model_stats(self.proto())
     }
 
+    /// Verifies that the given model satisfies all the properties
+    /// described in the proto comments. Returns an empty string if it is
+    /// the case, otherwise fails at the first error and returns a
+    /// human-readable description of the issue.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// # use cp_sat::builder::CpModelBuilder;
+    /// # use cp_sat::proto::CpSolverStatus;
+    /// let mut model = CpModelBuilder::default();
+    /// let x = model.new_int_var([(0, -1)]);
+    /// model.maximize(x);
+    /// assert!(!model.validate_cp_model().is_empty());
+    /// ```
+    pub fn validate_cp_model(&self) -> String {
+        ffi::validate_cp_model(self.proto())
+    }
+
     /// Solves the model, and returns the corresponding [proto::CpSolverResponse].
     ///
     /// # Example

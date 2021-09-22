@@ -57,3 +57,5 @@ pub mod proto {
 
 /// Interface with the CP SAT functions.
 pub mod ffi;
+
+pub use prost;
