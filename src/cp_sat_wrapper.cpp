@@ -1,6 +1,7 @@
 #include <iostream>
 
 #include <ortools/sat/cp_model.h>
+#include <ortools/sat/cp_model_checker.h>
 
 namespace sat = operations_research::sat;
 
@@ -72,4 +73,34 @@ cp_sat_wrapper_cp_solver_response_stats(
 
     const std::string stats = sat::CpSolverResponseStats(response, has_objective);
     return strdup(stats.c_str());
+}
+
+extern "C" char*
+cp_sat_wrapper_validate_cp_model(unsigned char* model_buf, size_t model_size) {
+    sat::CpModelProto model;
+    const bool res = model.ParseFromArray(model_buf, model_size);
+    assert(res);
+
+    const std::string stats = sat::ValidateCpModel(model);
+    return strdup(stats.c_str());
+}
+
+extern "C" bool
+cp_sat_wrapper_solution_is_feasible(
+    unsigned char* model_buf,
+    size_t model_size,
+    const int64_t* solution_buf,
+    size_t solution_size)
+{
+    sat::CpModelProto model;
+    const bool res = model.ParseFromArray(model_buf, model_size);
+    assert(res);
+
+    std::vector<int64_t> variable_values;
+    variable_values.reserve(solution_size);
+    for (size_t i = 0; i < solution_size; ++i) {
+        variable_values.push_back(solution_buf[i]);
+    }
+
+    return sat::SolutionIsFeasible(model, variable_values);
 }
