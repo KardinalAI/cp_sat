@@ -585,6 +585,106 @@ impl CpModelBuilder {
             exprs: exprs.into_iter().map(|e| e.into().into()).collect(),
         }))
     }
+
+    /// Adds a constraint that forces the `vars` to take one of the
+    /// tuples of values of `allowed_assignments`.
+    ///
+    /// # Error
+    /// Returns an error if the `vars` are empty, or if the value tuples
+    /// in `allowed_assignments` do not have the same length as `vars`.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// # use cp_sat::builder::{CpModelBuilder, LinearExpr};
+    /// # use cp_sat::proto::CpSolverStatus;
+    /// let mut model = CpModelBuilder::default();
+    /// let x = model.new_int_var([(0, 100)]);
+    /// let y = model.new_int_var([(0, 100)]);
+    /// let alternatives = [[2, 7], [3, 4]];
+    /// model.add_allowed_assignments([x, y], alternatives).unwrap();
+    /// let response = model.solve();
+    /// assert_eq!(response.status(), CpSolverStatus::Optimal);
+    /// let x_val = x.solution_value(&response);
+    /// let y_val = y.solution_value(&response);
+    /// assert!([2, 3].contains(&x_val));
+    /// assert!([7, 4].contains(&y_val));
+    /// assert!(alternatives.contains(&[x_val, y_val]));
+    /// ```
+    pub fn add_allowed_assignments(
+        &mut self,
+        vars: impl IntoIterator<Item = IntVar>,
+        allowed_assignments: impl IntoIterator<Item = impl IntoIterator<Item = i64>>
+    ) -> Result<Constraint, CpModelBuilderError> {
+        let vars: Vec<i32> = vars.into_iter().map(|v| v.0).collect();
+        if vars.len() == 0 {
+            return Err(CpModelBuilderError::NoVars);
+        }
+
+        // values are flattened into one vec
+        let mut values: Vec<i64> = Vec::new();
+        for tuple in allowed_assignments {
+            let prev_len = values.len();
+            values.extend(tuple);
+
+            if values.len() - prev_len != vars.len() {
+                let actual_len = values.len() - prev_len;
+                return Err(CpModelBuilderError::SizeMismatch(
+                    format!(
+                        "Value tuples should have a length of {} \
+                        equal to the variables length, but had a length of {}",
+                        vars.len(),
+                        actual_len,
+                    )
+                ));
+            }
+        }
+
+        Ok(self.add_cst(CstEnum::Table(proto::TableConstraintProto {
+           vars,
+            values,
+            negated: false,
+        })))
+    }
+
+    /// Adds a constraint that forces the `vars` to not take one of the
+    /// tuples of values of `forbidden_assignments`.
+    ///
+    /// # Error
+    /// Returns an error if the `vars` are empty, or if the value tuples
+    /// in `forbidden_assignments` do not have the same length as `vars`.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// # use cp_sat::builder::{CpModelBuilder, LinearExpr};
+    /// # use cp_sat::proto::CpSolverStatus;
+    /// let mut model = CpModelBuilder::default();
+    /// let x = model.new_int_var([(1, 2)]);
+    /// let y = model.new_int_var([(8, 9)]);
+    /// model.add_forbidden_assignments([x, y], [[1, 8], [2, 8], [2, 9]]).unwrap();
+    /// let response = model.solve();
+    /// assert_eq!(response.status(), CpSolverStatus::Optimal);
+    /// let x_val = x.solution_value(&response);
+    /// let y_val = y.solution_value(&response);
+    /// assert_eq!(x_val, 1);
+    /// assert_eq!(y_val, 9);
+    /// ```
+    pub fn add_forbidden_assignments(
+        &mut self,
+        vars: impl IntoIterator<Item = IntVar>,
+        forbidden_assignments: impl IntoIterator<Item = impl IntoIterator<Item = i64>>
+    ) -> Result<Constraint, CpModelBuilderError> {
+        let constraint = self.add_allowed_assignments(vars, forbidden_assignments)?;
+        match &mut self.proto.constraints[constraint.0].constraint {
+            Some(CstEnum::Table(table)) => {
+                table.negated = true;
+            },
+            _ => unreachable!("add_allowed_assignments should have created a table constraint"),
+        }
+        Ok(constraint)
+    }
+
     fn add_cst(&mut self, cst: CstEnum) -> Constraint {
         let index = self.proto.constraints.len();
         self.proto.constraints.push(proto::ConstraintProto {
@@ -1014,4 +1114,14 @@ impl<T: Into<LinearExpr>> std::iter::FromIterator<T> for LinearExpr {
         res.extend(iter);
         res
     }
+}
+
+/// Errors that may occur when building a model.
+#[derive(Debug)]
+pub enum CpModelBuilderError {
+    /// Variables were expected, but none were given.
+    NoVars,
+
+    /// The sizes of different inputs do not align.
+    SizeMismatch(String),
 }
