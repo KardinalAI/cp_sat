@@ -767,6 +767,48 @@ impl CpModelBuilder {
     pub fn solve_with_parameters(&self, params: &proto::SatParameters) -> proto::CpSolverResponse {
         ffi::solve_with_parameters(self.proto(), params)
     }
+
+    /// Solves the model with the given
+    /// [parameters][proto::SatParameters],
+    /// a solution handler that is called with feasible solutions [proto::CpSolverResponse],
+    /// and returns the final [proto::CpSolverResponse].
+    ///
+    /// The given function will be called on each improving feasible solution found
+    /// during the search. For a non-optimization problem, if the option
+    /// [proto::SatParameters::enumerate_all_solutions] to find all
+    /// solutions was set, then this will be called on each new solution.
+    ///
+    /// Please note that it does not work in parallel
+    /// (i. e. parameter [proto::SatParameters::num_search_workers] > 1).
+    ///
+    /// ```
+    /// # use std::cell::RefCell;
+    /// # use std::rc::Rc;
+    /// # use cp_sat::builder::CpModelBuilder;
+    /// # use cp_sat::proto::{SatParameters, CpSolverResponse};
+    /// let mut model = CpModelBuilder::default();
+    /// // linear constraint will only allow a = 2, a = 3 and a = 4
+    /// let a = model.new_int_var([(2, 7)]);
+    /// model.add_linear_constraint([(3, a)], [(0, 13)]);
+    /// let mut params = SatParameters::default();
+    /// params.enumerate_all_solutions = Some(true);
+    ///
+    /// let memory = Rc::new(RefCell::new(Vec::new()));
+    /// let memory2 = memory.clone();
+    /// let handler = move |response: CpSolverResponse| {
+    ///     memory2.borrow_mut().push(response);
+    /// };
+    ///
+    /// let _response = model.solve_with_parameters_and_handler(&params, handler);
+    /// assert_eq!(3, memory.borrow().len());
+    /// ```
+    pub fn solve_with_parameters_and_handler(
+        &self,
+        params: &proto::SatParameters,
+        handler: impl FnMut(proto::CpSolverResponse) + 'static,
+    ) -> proto::CpSolverResponse {
+        ffi::solve_with_parameters_and_handler(self.proto(), params, Box::new(handler))
+    }
 }
 
 /// Boolean variable identifier.
