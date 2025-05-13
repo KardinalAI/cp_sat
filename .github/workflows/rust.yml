@@ -11,16 +11,20 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
     - uses: actions/checkout@v2
+    - name: Install protobuf
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y protobuf-compiler libprotobuf-dev
     - name: Prepare dependencies
       run: |
         mkdir -p /opt && cd /opt
         curl -sL https://github.com/google/or-tools/releases/download/v9.12/or-tools_amd64_ubuntu-24.04_cpp_v9.12.4544.tar.gz | tar xzf -
         ln -s or-tools* ortools
     - name: Build
-      run: LD_LIBRARY_PATH=/opt/ortools/lib cargo build --workspace
+      run: LD_LIBRARY_PATH=/opt/ortools/lib RUSTFLAGS='-Clink-arg=-lprotobuf' cargo build --workspace
     - name: Run tests
-      run: LD_LIBRARY_PATH=/opt/ortools/lib cargo test --workspace
+      run: LD_LIBRARY_PATH=/opt/ortools/lib RUSTFLAGS='-Clink-arg=-lprotobuf' cargo test --workspace
     - name: fmt
       run: cargo fmt --all -- --check
     - name: clippy
-      run: LD_LIBRARY_PATH=/opt/ortools/lib cargo clippy --workspace -- -D warnings
+      run: LD_LIBRARY_PATH=/opt/ortools/lib RUSTFLAGS='-Clink-arg=-lprotobuf' cargo clippy --workspace -- -D warnings
