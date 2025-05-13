@@ -594,6 +594,23 @@ impl CpModelBuilder {
         Constraint(index)
     }
 
+    /// Enforces the constraint conditionally.
+    ///
+    /// You will probably prefer to use [Constraint::only_enforce_if]
+    /// directly on the constraint.
+    pub fn only_enforce_if(
+        &mut self,
+        constraint: Constraint,
+        vars: impl IntoIterator<Item = BoolVar>,
+    ) -> Constraint {
+        self.proto.constraints[constraint.0]
+            .enforcement_literal
+            .extend(
+                vars.into_iter().map(|v| v.0)
+            );
+        constraint
+    }
+
     /// Add a solution hint.
     ///
     /// # Example
@@ -858,6 +875,59 @@ impl IntVar {
 /// Constraint identifier.
 #[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct Constraint(usize);
+
+impl Constraint {
+    /// Enforces the constraint conditionally.
+    ///
+    /// The constraint will only be enforced iff all literals listed here
+    /// and previously added literals are true.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// # use cp_sat::builder::CpModelBuilder;
+    /// # use cp_sat::proto::CpSolverStatus;
+    /// let mut model = CpModelBuilder::default();
+    /// let x = model.new_int_var([(0, 2)]);
+    /// let y = model.new_int_var([(0, 2)]);
+    /// let b = model.new_bool_var();
+    /// model.add_linear_constraint([(1, x), (1, y)], [(4, 4)])
+    ///     .only_enforce_if(&mut model, [b]);
+    /// model.add_and([!b]);
+    /// model.minimize([(1, x), (1, y)]);
+    /// let response = model.solve();
+    /// assert_eq!(response.status(), CpSolverStatus::Optimal);
+    /// assert_eq!(x.solution_value(&response), 0);
+    /// assert_eq!(y.solution_value(&response), 0);
+    /// assert_eq!(b.solution_value(&response), false);
+    /// ```
+    ///
+    /// Same, but `b` is true:
+    /// ```
+    /// # use cp_sat::builder::CpModelBuilder;
+    /// # use cp_sat::proto::CpSolverStatus;
+    /// # let mut model = CpModelBuilder::default();
+    /// # let x = model.new_int_var([(0, 2)]);
+    /// # let y = model.new_int_var([(0, 2)]);
+    /// # let b = model.new_bool_var();
+    /// model.add_linear_constraint([(1, x), (1, y)], [(4, 4)])
+    ///     .only_enforce_if(&mut model, [b]);
+    /// model.add_and([b]);
+    /// model.minimize([(1, x), (1, y)]);
+    /// let response = model.solve();
+    /// assert_eq!(response.status(), CpSolverStatus::Optimal);
+    /// assert_eq!(x.solution_value(&response), 2);
+    /// assert_eq!(y.solution_value(&response), 2);
+    /// assert_eq!(b.solution_value(&response), true);
+    /// ```
+    pub fn only_enforce_if(
+        self,
+        model: &mut CpModelBuilder,
+        vars: impl IntoIterator<Item = BoolVar>,
+    ) -> Constraint {
+        model.only_enforce_if(self, vars)
+    }
+}
 
 /// A linear expression, used in several places in the
 /// [builder][CpModelBuilder].
