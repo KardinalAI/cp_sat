@@ -8,13 +8,13 @@ on:
 
 jobs:
   build:
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-24.04
     steps:
     - uses: actions/checkout@v2
     - name: Prepare dependencies
       run: |
         mkdir -p /opt && cd /opt
-        curl -sL https://github.com/google/or-tools/releases/download/v9.0/or-tools_ubuntu-20.04_v9.0.9048.tar.gz | tar xzf -
+        curl -sL https://github.com/google/or-tools/releases/download/v9.12/or-tools_amd64_ubuntu-24.04_cpp_v9.12.4544.tar.gz | tar xzf -
         ln -s or-tools* ortools
     - name: Build
       run: LD_LIBRARY_PATH=/opt/ortools/lib cargo build --workspace
