@@ -13,9 +13,9 @@ fn main() {
             .unwrap_or_else(|| "/opt/ortools".into());
         cc::Build::new()
             .cpp(true)
-            .flag("-std=c++17")
+            .flags(["-std=c++17", "-DOR_PROTO_DLL="])
             .file("src/cp_sat_wrapper.cpp")
-            .include(&[&ortools_prefix, "/include"].concat())
+            .include([&ortools_prefix, "/include"].concat())
             .compile("cp_sat_wrapper.a");
 
         println!("cargo:rustc-link-lib=dylib=ortools");
