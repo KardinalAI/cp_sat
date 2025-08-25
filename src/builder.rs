@@ -538,6 +538,39 @@ impl CpModelBuilder {
     }
 
     /// Adds a constraint that force the `target` to be equal to the
+    /// minimum of the given `exprs`.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// # use cp_sat::builder::{CpModelBuilder, LinearExpr};
+    /// # use cp_sat::proto::CpSolverStatus;
+    /// let mut model = CpModelBuilder::default();
+    /// let x = model.new_int_var([(0, 10)]);
+    /// let y = model.new_int_var([(5, 15)]);
+    /// let m = model.new_int_var([(-100, 100)]);
+    /// model.add_min_eq(m, [x, y]);
+    /// model.maximize(m);
+    /// let response = model.solve();
+    /// assert_eq!(response.status(), CpSolverStatus::Optimal);
+    /// assert_eq!(10., response.objective_value);
+    /// assert_eq!(10, m.solution_value(&response));
+    /// ```
+    pub fn add_min_eq(
+        &mut self,
+        target: impl Into<LinearExpr>,
+        exprs: impl IntoIterator<Item = impl Into<LinearExpr>>,
+    ) -> Constraint {
+        self.add_cst(CstEnum::LinMax(proto::LinearArgumentProto {
+            target: Some((-target.into()).into()),
+            exprs: exprs
+                .into_iter()
+                .map(|expr| (-expr.into()).into())
+                .collect(),
+        }))
+    }
+
+    /// Adds a constraint that force the `target` to be equal to the
     /// maximum of the given `exprs`.
     ///
     /// # Example
