@@ -51,6 +51,66 @@ cp_sat_wrapper_solve(
     return out_buf;
 }
 
+/**
+ * Solution handler that is called on every encountered solution.
+ *
+ * Arguments:
+ * - serialized buffer of a CpSolverResponse
+ * - length of the buffer
+ * - additional data passed from the outside
+ */
+typedef void (*solution_handler)(unsigned char*, size_t, void*);
+
+/**
+ * Similar to cp_sat_wrapper_solve_with_parameters, but with a callback function
+ * for all encountered solutions.
+ *
+ * - handler: called on every solution
+ * - handler_data: additional data that is provided to the callback
+ */
+extern "C" unsigned char*
+cp_sat_wrapper_solve_with_parameters_and_handler(
+    unsigned char* model_buf,
+    size_t model_size,
+    unsigned char* params_buf,
+    size_t params_size,
+    solution_handler handler,
+    void* handler_data,
+    size_t* out_size)
+{
+    sat::Model extra_model;
+    sat::CpModelProto model;
+    bool res = model.ParseFromArray(model_buf, model_size);
+    assert(res);
+
+    sat::SatParameters params;
+    res = params.ParseFromArray(params_buf, params_size);
+    assert(res);
+
+    extra_model.Add(sat::NewSatParameters(params));
+
+    // local function that serializes the CpSolverResponse for the provided solution handler
+    auto wrapped_handler = [&](const operations_research::sat::CpSolverResponse& curr_response) {
+        // serialize CpSolverResponse
+        size_t response_size = curr_response.ByteSizeLong();
+        unsigned char* response_buf = (unsigned char*) malloc(response_size);
+        bool curr_res = curr_response.SerializeToArray(response_buf, response_size);
+        assert(curr_res);
+
+        handler(response_buf, response_size, handler_data);
+    };
+    extra_model.Add(sat::NewFeasibleSolutionObserver(wrapped_handler));
+
+    sat::CpSolverResponse response = sat::SolveCpModel(model, &extra_model);
+
+    *out_size = response.ByteSizeLong();
+    unsigned char* out_buf = (unsigned char*) malloc(*out_size);
+    res = response.SerializeToArray(out_buf, *out_size);
+    assert(res);
+
+    return out_buf;
+}
+
 extern "C" char*
 cp_sat_wrapper_cp_model_stats(unsigned char* model_buf, size_t model_size) {
     sat::CpModelProto model;
