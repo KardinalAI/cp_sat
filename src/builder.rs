@@ -660,6 +660,71 @@ impl CpModelBuilder {
             exprs: exprs.into_iter().map(|e| e.into().into()).collect(),
         }))
     }
+    /// Creates a new interval variable with the given `start`, `size`,
+    /// and `end` expressions.
+    ///
+    /// The solver enforces `start + size == end`. An interval is stored
+    /// as a constraint in the model; other scheduling constraints
+    /// reference it by its constraint index.
+    pub fn new_interval_var(
+        &mut self,
+        start: impl Into<LinearExpr>,
+        size: impl Into<LinearExpr>,
+        end: impl Into<LinearExpr>,
+    ) -> IntervalVar {
+        let cst = self.add_cst(CstEnum::Interval(proto::IntervalConstraintProto {
+            start: Some(start.into().into()),
+            size: Some(size.into().into()),
+            end: Some(end.into().into()),
+        }));
+        IntervalVar(cst.0 as i32)
+    }
+
+    /// Creates a new fixed-size interval variable.
+    ///
+    /// This is a convenience method that creates an interval where
+    /// `end == start + size`. The `size` is a constant.
+    pub fn new_fixed_size_interval_var(
+        &mut self,
+        start: impl Into<LinearExpr>,
+        size: i64,
+    ) -> IntervalVar {
+        let start_expr: LinearExpr = start.into();
+        let end_expr = start_expr.clone() + size;
+        let size_expr = LinearExpr::from(size);
+        self.new_interval_var(start_expr, size_expr, end_expr)
+    }
+
+    /// Adds a no-overlap constraint on a set of intervals.
+    ///
+    /// All the given intervals must be pairwise disjoint. This is also
+    /// known as a disjunctive constraint in scheduling.
+    pub fn add_no_overlap(
+        &mut self,
+        intervals: impl IntoIterator<Item = IntervalVar>,
+    ) -> Constraint {
+        self.add_cst(CstEnum::NoOverlap(proto::NoOverlapConstraintProto {
+            intervals: intervals.into_iter().map(|iv| iv.0).collect(),
+        }))
+    }
+
+    /// Adds a cumulative constraint.
+    ///
+    /// At every integer time point, the sum of the demands of the
+    /// intervals that contain that point must not exceed `capacity`.
+    pub fn add_cumulative(
+        &mut self,
+        intervals: impl IntoIterator<Item = IntervalVar>,
+        demands: impl IntoIterator<Item = impl Into<LinearExpr>>,
+        capacity: impl Into<LinearExpr>,
+    ) -> Constraint {
+        self.add_cst(CstEnum::Cumulative(proto::CumulativeConstraintProto {
+            capacity: Some(capacity.into().into()),
+            intervals: intervals.into_iter().map(|iv| iv.0).collect(),
+            demands: demands.into_iter().map(|d| d.into().into()).collect(),
+        }))
+    }
+
     fn add_cst(&mut self, cst: CstEnum) -> Constraint {
         let index = self.proto.constraints.len();
         self.proto.constraints.push(proto::ConstraintProto {
@@ -948,6 +1013,15 @@ impl IntVar {
 /// Constraint identifier.
 #[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct Constraint(usize);
+
+/// Interval variable identifier.
+///
+/// An interval is defined by a start, size, and end, stored as a
+/// constraint in the model. Other scheduling constraints
+/// ([`CpModelBuilder::add_no_overlap`], [`CpModelBuilder::add_cumulative`])
+/// reference intervals by their constraint index.
+#[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct IntervalVar(i32);
 
 /// A linear expression, used in several places in the
 /// [builder][CpModelBuilder].
