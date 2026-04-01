@@ -1,6 +1,6 @@
 [package]
 name = "cp_sat"
-version = "0.3.3"
+version = "0.4.0"
 edition = "2018"
 description = "Rust bindings to the Google CP-SAT constraint programming solver."
 documentation = "https://docs.rs/cp_sat"
