@@ -5,9 +5,9 @@
 //!
 //! For `cp_sat` to work, you need to have a working OR-Tools
 //! installation. By default, this crate will use the default C++
-//! compiler, and add `/opt/ortools` in the search path. If you want
-//! to provide your OR-Tools installation directory, you can define
-//! the `ORTOOL_PREFIX` environment variable.
+//! compiler, and search for OR-Tools in `C:\Program Files\ortools`
+//! on Windows and `/opt/ortools` on other platforms. Set the
+//! `ORTOOLS_PREFIX` environment variable to override.
 //!
 //! # Brief overview
 //!
