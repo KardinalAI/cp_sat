@@ -19,6 +19,7 @@ fn main() {
             .compile("cp_sat_wrapper.a");
 
         println!("cargo:rustc-link-lib=dylib=ortools");
+        println!("cargo:rustc-link-lib=dylib=protobuf");
         println!("cargo:rustc-link-search=native={}/lib", ortools_prefix);
     }
 }
