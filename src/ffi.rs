@@ -1,7 +1,9 @@
 use crate::proto;
 use libc::c_char;
 use prost::Message;
-use std::ffi::CStr;
+use std::ffi::{c_void, CStr};
+use std::panic::{catch_unwind, resume_unwind, AssertUnwindSafe};
+use std::sync::atomic::{AtomicBool, Ordering};
 
 extern "C" {
     fn cp_sat_wrapper_solve(
@@ -29,6 +31,16 @@ extern "C" {
         solution_buf: *const i64,
         solution_size: usize,
     ) -> bool;
+    fn cp_sat_wrapper_solve_with_callback(
+        model_buf: *const u8,
+        model_size: usize,
+        params_buf: *const u8,
+        params_size: usize,
+        stop_flag: *const u8,
+        user_data: *mut c_void,
+        solution_cb: Option<extern "C" fn(*mut c_void, *const u8, usize)>,
+        out_size: &mut usize,
+    ) -> *mut u8;
 }
 
 /// Solves the given [CpModelProto][crate::proto::CpModelProto] and
@@ -69,6 +81,119 @@ pub fn solve_with_parameters(
     let out_slice = unsafe { std::slice::from_raw_parts(res, out_size) };
     let response = proto::CpSolverResponse::decode(out_slice).unwrap();
     unsafe { libc::free(res as _) };
+    response
+}
+
+/// Solves the given [CpModelProto][crate::proto::CpModelProto] with the given
+/// parameters, streaming improving solutions to `on_solution` and allowing the
+/// search to be interrupted.
+///
+/// `on_solution` is invoked with each improving feasible
+/// [CpSolverResponse][crate::proto::CpSolverResponse] the solver finds (for a
+/// satisfaction problem solved with `enumerate_all_solutions`, it is invoked for
+/// every solution instead). The closure runs on a solver-owned thread, but
+/// OR-Tools serialises these calls so they never overlap — hence `FnMut`
+/// (exclusive access) is sufficient and `Sync` is not required.
+///
+/// If `stop` is `Some`, storing `true` into it from any thread asks the solver
+/// to stop as soon as possible and return the best solution found so far. The
+/// borrow guarantees the flag outlives the solve.
+///
+/// # Panics
+///
+/// If `on_solution` panics, the panic is caught before it can unwind through the
+/// C++ frames (which would be undefined behaviour); the search is then asked to
+/// stop and the panic is re-raised on this thread once the solver returns. Any
+/// solutions reported after the first panic are ignored.
+pub fn solve_with_callback<F>(
+    model: &proto::CpModelProto,
+    params: &proto::SatParameters,
+    stop: Option<&AtomicBool>,
+    on_solution: F,
+) -> proto::CpSolverResponse
+where
+    F: FnMut(&proto::CpSolverResponse) + Send,
+{
+    struct Context<F> {
+        on_solution: F,
+        stop: *const AtomicBool,
+        panic: Option<Box<dyn std::any::Any + Send + 'static>>,
+    }
+
+    extern "C" fn trampoline<F: FnMut(&proto::CpSolverResponse)>(
+        user_data: *mut c_void,
+        resp_buf: *const u8,
+        resp_size: usize,
+    ) {
+        // SAFETY: `user_data` points at the `Context` owned by the enclosing
+        // `solve_with_callback` call, which blocks until the solver returns and
+        // therefore outlives every callback. OR-Tools serialises observer calls,
+        // so no two `&mut Context` references are ever live at the same time.
+        let context = unsafe { &mut *(user_data as *mut Context<F>) };
+        if context.panic.is_some() {
+            return;
+        }
+        let slice = unsafe { std::slice::from_raw_parts(resp_buf, resp_size) };
+        let response = match proto::CpSolverResponse::decode(slice) {
+            Ok(response) => response,
+            Err(_) => return,
+        };
+        let outcome = {
+            let on_solution = &mut context.on_solution;
+            catch_unwind(AssertUnwindSafe(|| on_solution(&response)))
+        };
+        if let Err(payload) = outcome {
+            // A panic must never unwind across the C++ frames. Capture it, ask
+            // the solver to stop, and re-raise it once `Solve` has returned.
+            context.panic = Some(payload);
+            if !context.stop.is_null() {
+                unsafe { (*context.stop).store(true, Ordering::SeqCst) };
+            }
+        }
+    }
+
+    let mut model_buf = Vec::default();
+    model.encode(&mut model_buf).unwrap();
+    let mut params_buf = Vec::default();
+    params.encode(&mut params_buf).unwrap();
+
+    let stop_ptr = stop.map_or(std::ptr::null(), |flag| flag as *const AtomicBool);
+    let mut context = Context {
+        on_solution,
+        stop: stop_ptr,
+        panic: None,
+    };
+    let user_data = &mut context as *mut Context<F> as *mut c_void;
+
+    let mut out_size = 0;
+    let res = unsafe {
+        cp_sat_wrapper_solve_with_callback(
+            model_buf.as_ptr(),
+            model_buf.len(),
+            params_buf.as_ptr(),
+            params_buf.len(),
+            stop_ptr as *const u8,
+            user_data,
+            Some(trampoline::<F>),
+            &mut out_size,
+        )
+    };
+
+    // `out_size == 0` makes a conforming `malloc` free to return null, so guard
+    // it rather than building a slice from a null pointer.
+    let response = if res.is_null() {
+        proto::CpSolverResponse::default()
+    } else {
+        let out_slice = unsafe { std::slice::from_raw_parts(res, out_size) };
+        let decoded = proto::CpSolverResponse::decode(out_slice).unwrap();
+        unsafe { libc::free(res as _) };
+        decoded
+    };
+
+    if let Some(payload) = context.panic.take() {
+        resume_unwind(payload);
+    }
+
     response
 }
 

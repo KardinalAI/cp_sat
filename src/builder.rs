@@ -850,6 +850,41 @@ impl CpModelBuilder {
     pub fn solve_with_parameters(&self, params: &proto::SatParameters) -> proto::CpSolverResponse {
         ffi::solve_with_parameters(self.proto(), params)
     }
+
+    /// Solves the model with the given
+    /// [parameters][proto::SatParameters], reporting every improving
+    /// solution to `on_solution` and allowing the search to be stopped
+    /// early through `stop`.
+    ///
+    /// See [ffi::solve_with_callback] for the threading and interruption
+    /// semantics: `on_solution` is called from a solver-owned thread (calls
+    /// are serialised, never concurrent), and setting `stop` to `true` from
+    /// any thread requests an early stop returning the best solution so far.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// # use cp_sat::builder::CpModelBuilder;
+    /// # use cp_sat::proto::{CpSolverStatus, SatParameters};
+    /// let mut model = CpModelBuilder::default();
+    /// let x = model.new_int_var([(0, 10)]);
+    /// model.maximize(x);
+    /// let mut seen = 0;
+    /// let response = model.solve_with_callback(&SatParameters::default(), None, |_| seen += 1);
+    /// assert_eq!(response.status(), CpSolverStatus::Optimal);
+    /// assert!(seen >= 1);
+    /// ```
+    pub fn solve_with_callback<F>(
+        &self,
+        params: &proto::SatParameters,
+        stop: Option<&std::sync::atomic::AtomicBool>,
+        on_solution: F,
+    ) -> proto::CpSolverResponse
+    where
+        F: FnMut(&proto::CpSolverResponse) + Send,
+    {
+        ffi::solve_with_callback(self.proto(), params, stop, on_solution)
+    }
 }
 
 /// Boolean variable identifier.

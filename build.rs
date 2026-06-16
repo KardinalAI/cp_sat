@@ -13,9 +13,18 @@ fn main() {
             .unwrap_or_else(|| "/opt/ortools".into());
         cc::Build::new()
             .cpp(true)
-            .flags(["-std=c++17", "-DOR_PROTO_DLL="])
+            // OR-Tools' published binaries are built with NDEBUG. Compiling the
+            // wrapper against its headers without NDEBUG instantiates the
+            // debug variant of Abseil's containers (e.g. the absl::flat_hash_map
+            // behind sat::Model::GetOrCreate), which references debug-only Abseil
+            // symbols absent from the release libs and is an ODR violation. Match
+            // the library's configuration.
+            .flags(["-std=c++17", "-DOR_PROTO_DLL=", "-DNDEBUG"])
+            // Pull the OR-Tools headers in as system headers so their own
+            // diagnostics (unused params, sign comparisons, ...) stay out of the
+            // build log; warnings in our own wrapper still surface normally.
+            .flag(&format!("-isystem{}/include", ortools_prefix))
             .file("src/cp_sat_wrapper.cpp")
-            .include([&ortools_prefix, "/include"].concat())
             .compile("cp_sat_wrapper.a");
 
         println!("cargo:rustc-link-lib=dylib=ortools");
