@@ -2,6 +2,7 @@ use crate::proto;
 use libc::c_char;
 use prost::Message;
 use std::ffi::CStr;
+use std::ffi::c_void;
 
 extern "C" {
     fn cp_sat_wrapper_solve(
@@ -14,6 +15,15 @@ extern "C" {
         model_size: usize,
         params_buf: *const u8,
         params_size: usize,
+        out_size: &mut usize,
+    ) -> *mut u8;
+    fn cp_sat_wrapper_solve_with_parameters_and_handler(
+        model_buf: *const u8,
+        model_size: usize,
+        params_buf: *const u8,
+        params_size: usize,
+        handler_caller: extern "C" fn(*const u8, usize, *mut c_void),
+        handler: *mut c_void,
         out_size: &mut usize,
     ) -> *mut u8;
     fn cp_sat_wrapper_cp_model_stats(model_buf: *const u8, model_size: usize) -> *mut c_char;
@@ -70,6 +80,66 @@ pub fn solve_with_parameters(
     let response = proto::CpSolverResponse::decode(out_slice).unwrap();
     unsafe { libc::free(res as _) };
     response
+}
+
+/// User provided solution handler that is called with feasible solutions.
+pub type SolutionHandler = Box<dyn FnMut(proto::CpSolverResponse)>;
+
+/// Solves the given [CpModelProto][crate::proto::CpModelProto] with
+/// the given parameters,
+/// and calls the [SolutionHandler] on each improving feasible solution found
+/// during the search. For a non-optimization problem, if the option
+/// [proto::SatParameters.enumerate_all_solutions] to find all
+/// solutions was set, then this will be called on each new solution.
+///
+/// Please note that it does not work in parallel
+/// (i. e. parameter [proto::SatParameters::num_search_workers] > 1).
+pub fn solve_with_parameters_and_handler(
+    model: &proto::CpModelProto,
+    params: &proto::SatParameters,
+    mut handler: SolutionHandler,
+) -> proto::CpSolverResponse {
+    let mut model_buf = Vec::default();
+    model.encode(&mut model_buf).unwrap();
+    let mut params_buf = Vec::default();
+    params.encode(&mut params_buf).unwrap();
+
+    let mut out_size = 0;
+    let res = unsafe {
+        cp_sat_wrapper_solve_with_parameters_and_handler(
+            model_buf.as_ptr(),
+            model_buf.len(),
+            params_buf.as_ptr(),
+            params_buf.len(),
+            solution_handler_caller,
+            &mut handler as *mut _ as *mut c_void,
+            &mut out_size,
+        )
+    };
+    let out_slice = unsafe { std::slice::from_raw_parts(res, out_size) };
+    let response = proto::CpSolverResponse::decode(out_slice).unwrap();
+    unsafe { libc::free(res as _) };
+    response
+}
+
+/// Callback that is called from cpp code and transforms a buffered response to a
+/// [proto::CpSolverResponse] that can be used by a [SolutionHandler].
+///
+/// # Arguments
+/// - `response_buf` and `response_size`: buffer and size of a [proto::CpSolverResponse]
+/// - `handler`: a user provided solution handler [SolutionHandler] that accepts a
+///     [proto::CpSolverResponse]
+extern "C" fn solution_handler_caller(response_buf: *const u8, response_size: usize, handler: *mut c_void) {
+    let response_slice = unsafe {
+        std::slice::from_raw_parts(response_buf, response_size)
+    };
+    let response = proto::CpSolverResponse::decode(response_slice).unwrap();
+    unsafe { libc::free(response_buf as _) };
+
+    unsafe {
+        let tmp = handler as *mut SolutionHandler;
+        (*tmp)(response);
+    }
 }
 
 /// Returns a string with some statistics on the given
